@@ -1,0 +1,37 @@
+# Виртуальное окружение
+venv/
+.venv/
+env/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Базы данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Отчёты и покрытие
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Настройки редакторов
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
