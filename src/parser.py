@@ -62,7 +62,7 @@ class BigGeekParser:
         return self.parse_html(self.fetch(url))
 
     def parse_html(self, html: str) -> list[dict]:
-        """Разбирает готовый HTML каталога (удобно для тестов на фикстурах)."""
+        """Разбирает готовый HTML каталога (удобно для отладки)."""
         soup = self._make_soup(html)
         products = []
         for card in soup.find_all("div", class_=CARD_CLASS):

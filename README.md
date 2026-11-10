@@ -16,7 +16,7 @@
 - Валидация типов и длины строк: `name` до 256 символов, `message` до 8096.
 - Пользовательские исключения: `ValidationError`, `DuplicateIdError`,
   `CommentNotFoundError`.
-- Тесты на `unittest` с локальной HTML-фикстурой (без зависимости от сети).
+- Тесты на `unittest`; парсер проверяется на живом сайте BigGeek (нужен интернет).
 - `demo.py` — простой пример в стиле `requests` + `bs4`, как в методичке.
 
 ## Структура проекта
@@ -32,8 +32,6 @@ lab5_mitanov/
 │   ├── database.py
 │   └── parser.py
 └── tests/
-    ├── fixtures/
-    │   └── biggeek_page.html
     ├── test_database.py
     └── test_parser.py
 ```
@@ -110,7 +108,7 @@ ID товара записывается в `id`, название — в `name`
 .\venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Ожидаемый результат: `Ran 20 tests` и `OK`.
+Ожидаемый результат: `Ran 19 tests` и `OK`.
 
-Тесты парсера используют `tests/fixtures/biggeek_page.html`, поэтому не
-зависят от доступности сайта.
+Тесты парсера обращаются к живому сайту BigGeek, поэтому для них нужен
+доступ в интернет. Количество товаров на странице может меняться.
