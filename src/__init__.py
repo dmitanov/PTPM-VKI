@@ -6,13 +6,14 @@ from .database import (
     DuplicateIdError,
     ValidationError,
 )
-from .parser import ForumParseError, ForumParser
+from .parser import BigGeekParser, ForumParseError, ForumParser
 
 __all__ = [
     "DatabaseRepository",
     "ValidationError",
     "DuplicateIdError",
     "CommentNotFoundError",
+    "BigGeekParser",
     "ForumParser",
     "ForumParseError",
 ]

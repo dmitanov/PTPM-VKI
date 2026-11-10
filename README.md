@@ -1,20 +1,23 @@
 # Лабораторная работа №5. Парсинг и тестирование на Python
 
-Проект демонстрирует автоматизированный сбор данных с HTML-страницы и их
-сохранение в SQLite, а также покрытие модулей unit-тестами.
+Проект собирает данные о ноутбуках Apple с каталога
+[biggeek.ru/catalog/noutbuki-apple](https://biggeek.ru/catalog/noutbuki-apple),
+сохраняет их в SQLite и проверяется unit-тестами.
 
 ## Возможности
 
+- `BigGeekParser` — загрузка страницы через `requests` с `User-Agent`,
+  разбор через `BeautifulSoup`, извлечение ID, названия и цены товара.
+- `BigGeekParser.parse_page(url)` — скачать и разобрать страницу.
+- `BigGeekParser.parse_html(html)` — разобрать готовый HTML (для тестов).
+- `BigGeekParser.save_to_db(data, repository)` — сохранить товары в БД.
 - `DatabaseRepository` — работа с таблицей `comments` в SQLite:
   `add`, `get_by_id`, `get_by_name`, `update`, `delete`, `get_all`.
 - Валидация типов и длины строк: `name` до 256 символов, `message` до 8096.
 - Пользовательские исключения: `ValidationError`, `DuplicateIdError`,
   `CommentNotFoundError`.
-- `ForumParser` — загрузка страницы через `requests` с `User-Agent`,
-  разбор через `BeautifulSoup`, извлечение ID, автора и текста поста
-  с сохранением внутренней HTML-разметки.
-- `ForumParser.save_to_db` — сохранение результатов парсинга в репозиторий.
 - Тесты на `unittest` с локальной HTML-фикстурой (без зависимости от сети).
+- `demo.py` — простой пример в стиле `requests` + `bs4`, как в методичке.
 
 ## Структура проекта
 
@@ -23,13 +26,14 @@ lab5_mitanov/
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
+├── demo.py
 ├── src/
 │   ├── __init__.py
 │   ├── database.py
 │   └── parser.py
 └── tests/
     ├── fixtures/
-    │   └── forum_page.html
+    │   └── biggeek_page.html
     ├── test_database.py
     └── test_parser.py
 ```
@@ -37,30 +41,40 @@ lab5_mitanov/
 ## Установка
 
 ```powershell
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+py -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## Запуск тестов
+## Запуск
+
+Простой пример парсинга каталога:
 
 ```powershell
-python -m unittest discover -s tests -v
+.\venv\Scripts\python.exe demo.py
 ```
 
-## Пример использования
+Пример вывода:
+
+```text
+Ноутбук Apple MacBook Neo 13" MHFA4 (A18 Pro 6-Core, GPU 5-Core, 8GB, 256GB) (Серебристый | Silver) - 68 990 ₽
+Ноутбук Apple MacBook Pro 14" с нанотекстурой, кастомный (M5 10-Core, GPU 10-Core, 32GB, 2TB) (Серебристый | Silver) - 311 990 ₽
+...
+Всего товаров: 24
+```
+
+Использование класса парсера:
 
 ```python
 from src.database import DatabaseRepository
-from src.parser import ForumParser
+from src.parser import BigGeekParser
 
-repo = DatabaseRepository("forum.db")
-parser = ForumParser()
+repo = DatabaseRepository("biggeek.db")
+parser = BigGeekParser()
 
-posts = parser.parse_page("https://example.com/forum/thread/1")
-parser.save_to_db(posts, repo)
+products = parser.parse_page()
+parser.save_to_db(products, repo)
 
-print(repo.get_by_name("alice"))
+print(repo.get_by_id(37079))
 repo.close()
 ```
 
@@ -69,9 +83,34 @@ repo.close()
 `parse_page` и `parse_html` возвращают список словарей:
 
 ```python
-{"id": 101, "name": "alice", "message": "<p>Привет, <strong>мир</strong>!</p>"}
+{
+    "id": 37079,
+    "name": "Ноутбук Apple MacBook Neo 13\" MHFA4 ...",
+    "price": "68 990 ₽",
+    "message": "68 990 ₽",
+    "url": "https://biggeek.ru/products/noutbuk-apple-macbook-neo-13-mhfa4",
+}
 ```
 
-Парсер поддерживает типовые селекторы контейнеров (`.post`, `.message`,
-`.comment`), авторов (`.author`, `.username`, `.login`, `[data-author]`) и
-текста (`.message-body`, `.post-content`, `.message-content` и др.).
+Поле `message` дублирует `price` для совместимости с таблицей `comments`:
+ID товара записывается в `id`, название — в `name`, цена — в `message`.
+
+## Селекторы BigGeek
+
+| Данные | Селектор |
+|---|---|
+| Карточка товара | `div.catalog-card` |
+| Название | `a.catalog-card__title` |
+| Цена | `a.catalog-card__price b.cart-modal-count` |
+| ID товара | `[data-product-id]` |
+
+## Запуск тестов
+
+```powershell
+.\venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Ожидаемый результат: `Ran 20 tests` и `OK`.
+
+Тесты парсера используют `tests/fixtures/biggeek_page.html`, поэтому не
+зависят от доступности сайта.

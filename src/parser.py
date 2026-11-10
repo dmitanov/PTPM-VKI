@@ -1,12 +1,13 @@
-"""Парсер страниц форума на основе requests и BeautifulSoup."""
+"""Парсер каталога ноутбуков Apple на сайте biggeek.ru."""
 
 from __future__ import annotations
 
-import re
 from typing import Iterable, Optional
 
 import requests
 from bs4 import BeautifulSoup, FeatureNotFound
+
+DEFAULT_URL = "https://biggeek.ru/catalog/noutbuki-apple"
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -18,52 +19,23 @@ DEFAULT_HEADERS = {
     "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
-POST_SELECTORS = (
-    "article.post",
-    "div.post",
-    "li.post",
-    "article.message",
-    "div.message",
-    "li.message",
-    "div.comment",
-    "li.comment",
-)
-
-AUTHOR_SELECTORS = (
-    ".post-author",
-    ".message-author",
-    ".author",
-    ".username",
-    ".user-name",
-    ".login",
-    "[data-author]",
-)
-
-MESSAGE_SELECTORS = (
-    ".message-body",
-    ".post-message",
-    ".message-content",
-    ".post-content",
-    ".message-text",
-    ".content",
-    ".body",
-)
-
-ID_ATTRIBUTES = ("data-post-id", "data-comment-id", "data-message-id", "data-id")
-ID_PATTERN = re.compile(r"^(?:post|comment|message)?[-_]?(\d+)$", re.IGNORECASE)
+CARD_CLASS = "catalog-card"
+TITLE_CLASS = "catalog-card__title"
+PRICE_CLASS = "catalog-card__price"
+CURRENT_PRICE_CLASS = "cart-modal-count"
 
 
 class ForumParseError(RuntimeError):
-    """Ошибка загрузки или разбора страницы форума."""
+    """Ошибка загрузки или разбора страницы каталога."""
 
 
-class ForumParser:
-    """Извлекает ID, автора и текст сообщений со страницы форума."""
+class BigGeekParser:
+    """Извлекает ID, название и цену товаров из карточек BigGeek."""
 
     def __init__(
         self,
         headers: Optional[dict] = None,
-        timeout: int = 15,
+        timeout: int = 30,
         session: Optional[requests.Session] = None,
         parser: str = "lxml",
     ) -> None:
@@ -73,8 +45,8 @@ class ForumParser:
         self.session.headers.update(self.headers)
         self.parser = parser
 
-    def fetch(self, url: str) -> str:
-        """Скачивает HTML-страницу с передачей заголовков."""
+    def fetch(self, url: str = DEFAULT_URL) -> str:
+        """Скачивает HTML-страницу каталога с передачей заголовков."""
         try:
             response = self.session.get(url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
@@ -85,19 +57,19 @@ class ForumParser:
             response.encoding = response.apparent_encoding
         return response.text
 
-    def parse_page(self, url: str) -> list[dict]:
-        """Скачивает страницу по URL и возвращает список сообщений."""
+    def parse_page(self, url: str = DEFAULT_URL) -> list[dict]:
+        """Скачивает страницу по URL и возвращает список товаров."""
         return self.parse_html(self.fetch(url))
 
     def parse_html(self, html: str) -> list[dict]:
-        """Разбирает готовый HTML (удобно для тестов на фикстурах)."""
+        """Разбирает готовый HTML каталога (удобно для тестов на фикстурах)."""
         soup = self._make_soup(html)
-        posts = []
-        for node in self._find_post_containers(soup):
-            post = self._parse_post(node)
-            if post is not None:
-                posts.append(post)
-        return posts
+        products = []
+        for card in soup.find_all("div", class_=CARD_CLASS):
+            product = self._parse_card(card)
+            if product is not None:
+                products.append(product)
+        return products
 
     def _make_soup(self, html: str) -> BeautifulSoup:
         try:
@@ -105,75 +77,48 @@ class ForumParser:
         except FeatureNotFound:
             return BeautifulSoup(html, "html.parser")
 
-    def _find_post_containers(self, soup: BeautifulSoup) -> Iterable:
-        seen = set()
-        for selector in POST_SELECTORS:
-            for node in soup.select(selector):
-                if id(node) not in seen:
-                    seen.add(id(node))
-                    yield node
-
-    def _parse_post(self, node) -> Optional[dict]:
-        comment_id = self._extract_id(node)
-        name = self._extract_author(node)
-        message = self._extract_message(node)
-
-        if comment_id is None or name is None or message is None:
+    def _parse_card(self, card) -> Optional[dict]:
+        title_tag = card.find("a", class_=TITLE_CLASS)
+        price_tag = card.find("a", class_=PRICE_CLASS)
+        if title_tag is None or price_tag is None:
             return None
-        return {"id": comment_id, "name": name, "message": message}
 
-    def _extract_id(self, node) -> Optional[int]:
-        for attribute in ID_ATTRIBUTES:
-            value = node.get(attribute)
-            if value and str(value).strip().isdigit():
-                return int(str(value).strip())
+        name = title_tag.get_text(" ", strip=True)
+        price_tag = price_tag.find("b", class_=CURRENT_PRICE_CLASS) or price_tag
+        price = price_tag.get_text(" ", strip=True)
 
-        for attribute in ("id", "name"):
-            value = node.get(attribute)
-            if not value:
-                continue
-            match = ID_PATTERN.match(str(value).strip())
-            if match:
-                return int(match.group(1))
+        comment_id = self._extract_id(card)
+        if comment_id is None or not name or not price:
+            return None
 
-        link = node.find("a", href=True)
-        if link is not None:
-            match = ID_PATTERN.match(str(link["href"]).strip().lstrip("#"))
-            if match:
-                return int(match.group(1))
-        return None
+        href = title_tag.get("href")
+        url = f"https://biggeek.ru{href}" if href and href.startswith("/") else href
 
-    def _extract_author(self, node) -> Optional[str]:
-        for selector in AUTHOR_SELECTORS:
-            element = node.select_one(selector)
-            if element is None:
-                continue
-            if element.has_attr("data-author"):
-                value = element.get("data-author", "")
-            else:
-                value = element.get_text(strip=True)
-            if value:
-                return value
+        return {
+            "id": comment_id,
+            "name": name,
+            "price": price,
+            "message": price,
+            "url": url,
+        }
 
-        author = node.get("data-author")
-        if author and str(author).strip():
-            return str(author).strip()
-        return None
+    @staticmethod
+    def _extract_id(card) -> Optional[int]:
+        id_tag = card.select_one("[data-product-id]")
+        if id_tag is None:
+            return None
 
-    def _extract_message(self, node) -> Optional[str]:
-        for selector in MESSAGE_SELECTORS:
-            element = node.select_one(selector)
-            if element is None:
-                continue
-            message = element.decode_contents().strip()
-            if message:
-                return message
-        return None
+        value = str(id_tag.get("data-product-id", "")).strip()
+        return int(value) if value.isdigit() else None
 
     def save_to_db(self, parsed_data: Iterable[dict], repository) -> int:
-        """Сохраняет разобранные сообщения через DatabaseRepository."""
+        """Сохраняет товары в БД: name — название, message — цена."""
         saved = 0
-        for post in parsed_data:
-            repository.add(post["id"], post["name"], post["message"])
+        for product in parsed_data:
+            price = product.get("price", product.get("message", ""))
+            repository.add(product["id"], product["name"], price)
             saved += 1
         return saved
+
+
+ForumParser = BigGeekParser
