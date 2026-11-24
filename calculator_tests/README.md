@@ -4,6 +4,8 @@
 
 Цель: показать разделение локаторов и действий с интерфейсом от тестовой логики. Тесты работают с публичными методами `CalculatorPage` и не обращаются к `driver.find_element` напрямую.
 
+GitHub: https://github.com/dmitanov/PTPM-VKI/tree/Lab_6_mitanovdv2407ca1
+
 ## Структура проекта
 
 ```text
